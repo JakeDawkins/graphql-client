@@ -56,6 +56,8 @@ pub(crate) fn resolve(
 ) -> Result<Query, QueryValidationError> {
     let mut resolved_query: Query = Default::default();
 
+    // resolve the root of each operation in the query
+    // there can be multiple, i.e. `query { field } mutation mut_name { add }`
     create_roots(&mut resolved_query, query, schema)?;
 
     // Then resolve the selections.
@@ -89,6 +91,8 @@ pub(crate) fn resolve(
     Ok(resolved_query)
 }
 
+// TODO: what is a resolved_query?
+// It's just a Query with list of operations that have unfilled selection sets
 fn create_roots(
     resolved_query: &mut Query,
     query: &graphql_parser::query::Document,
@@ -269,6 +273,36 @@ fn resolve_object_selection<'a>(
     for item in selection_set.items.iter() {
         match item {
             graphql_parser::query::Selection::Field(field) => {
+                // TODO: validate field args here
+                for arg in &field.arguments {
+                    let (arg_name, variable) = arg;
+                    if let graphql_parser::query::Value::Variable(var_name) = variable {
+                        // 1. TODO lookup value in operation signature to see type
+                        let found_variable = query.variables.iter().find(|f| &f.name == var_name);
+                        if found_variable.is_none() {
+                            return Err(QueryValidationError::new(format!(
+                                "Argument `{}` on `{}` matches no variable in the operation signature",
+                                arg_name, field.name
+                            )));
+                        };
+                        let found_variable = found_variable.unwrap();
+                        // 2. TODO lookup type in schema to make sure it's a real type
+                        let schema_type = found_variable.type_name(schema);
+                        dbg!(schema_type);
+
+                        // 3. Look up field args type and make sure it matches variable type
+                        // let field_args_type =
+                        // TODO, I don't see the field arg anywhere in the `schema` :(((((
+                        dbg!(&schema);
+                        let _var_is_required_type = found_variable
+                            .r#type
+                            .clone()
+                            .qualifiers
+                            .iter()
+                            .any(|qual| qual.is_required());
+                    };
+                }
+
                 if field.name == TYPENAME_FIELD {
                     let id = query.push_selection(Selection::Typename, parent);
                     parent.add_to_selection_set(query, id);
@@ -304,6 +338,7 @@ fn resolve_object_selection<'a>(
 
                 parent.add_to_selection_set(query, id);
             }
+            // TODO can inline frags or spreads have variables?
             graphql_parser::query::Selection::InlineFragment(inline) => {
                 let selection_id = resolve_inline_fragment(query, schema, inline, parent)?;
 

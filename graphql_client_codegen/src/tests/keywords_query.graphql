@@ -1,6 +1,6 @@
-query searchQuery($criteria: extern!) {
+query searchQuery($struct: extern!, $shouldFail: Int!) {
   search {
-    transactions(criteria: $searchID) {
+    transactions(struct: $struct, shouldFail: $shouldFail) {
       for
       status
     }
